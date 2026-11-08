@@ -1,0 +1,148 @@
+name: Update PKGBUILD
+
+# 每天检查一次官方 Linux 包版本；有新版就更新 PKGBUILD / .SRCINFO 并提交。
+# 手动触发：Actions → Update PKGBUILD → Run workflow
+
+on:
+  schedule:
+    # 03:17 UTC = 11:17 北京时间，刻意避开整点（GitHub 定时任务在整点排队最严重）
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-pkgbuild
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Check upstream and bump
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: archlinux:latest
+
+    steps:
+      - name: Install toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          # 先单独同步 keyring：容器镜像的 keyring 可能比仓库旧，直接 -Syu 会报签名错误
+          pacman -Sy --noconfirm --needed archlinux-keyring
+          pacman -Su --noconfirm --needed base-devel git curl jq
+          # makepkg 拒绝以 root 运行（/usr/bin/makepkg 里 EUID == 0 直接 exit），
+          # 建一个普通用户，只在生成 .SRCINFO 时用它。
+          id -u builder >/dev/null 2>&1 || useradd -m -s /bin/bash builder
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check upstream and update files
+        id: update
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          api_x64='https://copilot.tencent.com/v2/update?platform=workbuddy-linux-x64-deb'
+          api_arm='https://copilot.tencent.com/v2/update?platform=workbuddy-linux-arm64-deb'
+
+          json_x64=$(curl -fsSL --retry 3 --retry-delay 5 "$api_x64")
+          version=$(jq -er '.version' <<<"$json_x64")
+          url_x64=$(jq -er '.url' <<<"$json_x64")
+          api_sha_x64=$(jq -r '.sha256hash // ""' <<<"$json_x64")
+          url_arm=$(curl -fsSL --retry 3 --retry-delay 5 "$api_arm" | jq -er '.url')
+
+          # 文件名形如 WorkBuddy-linux-x64-deb-5.6.2.40046327-c7b525f3.deb
+          # build 号只存在于 URL 里，API 的 version 字段不含它。
+          build=$(basename "$url_x64" .deb)
+          build=${build#WorkBuddy-linux-x64-deb-"${version}"-}
+          if [[ ! $build =~ ^[0-9a-f]{6,40}$ ]]; then
+            echo "::error::无法从 URL 解析 build 号：$url_x64"
+            exit 1
+          fi
+
+          # 两个架构必须同版本同 build，否则 PKGBUILD 里单套 _pkgver/_build 无法表达
+          expected_arm="WorkBuddy-linux-arm64-deb-${version}-${build}.deb"
+          actual_arm=$(basename "$url_arm")
+          if [[ $actual_arm != "$expected_arm" ]]; then
+            echo "::error::arm64 包名与 x64 不一致：$actual_arm != $expected_arm"
+            exit 1
+          fi
+
+          cur_pkgver=$(sed -n 's/^_pkgver=//p' PKGBUILD)
+          cur_build=$(sed -n 's/^_build=//p' PKGBUILD)
+          current="${cur_pkgver}_${cur_build}"
+          upstream="${version}_${build}"
+
+          echo "当前版本：$current"
+          echo "上游版本：$upstream"
+
+          if [[ $current == "$upstream" ]]; then
+            echo "已是最新，无需更新"
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # 自己下载并计算校验和：updpkgsums 只处理当前架构，且默认走 makepkg 的源码解析，
+          # 这里显式处理 x86_64 / aarch64 两个 deb。
+          echo "下载 x86_64 包…"
+          sum_x64=$(curl -fsSL --retry 3 --retry-delay 5 "$url_x64" | sha256sum | cut -d' ' -f1)
+          echo "下载 aarch64 包…"
+          sum_arm=$(curl -fsSL --retry 3 --retry-delay 5 "$url_arm" | sha256sum | cut -d' ' -f1)
+
+          for s in "$sum_x64" "$sum_arm"; do
+            if [[ ! $s =~ ^[0-9a-f]{64}$ ]]; then
+              echo "::error::校验和格式异常：$s"
+              exit 1
+            fi
+          done
+
+          # 官方接口也声明了 sha256，与实测值交叉验证；不一致说明 CDN 内容与声明不符
+          if [[ -n $api_sha_x64 && $api_sha_x64 != "$sum_x64" ]]; then
+            echo "::error::x86_64 校验和与官方接口声明不一致（api=$api_sha_x64 real=$sum_x64）"
+            exit 1
+          fi
+
+          sed -i \
+            -e "s/^_pkgver=.*/_pkgver=${version}/" \
+            -e "s/^_build=.*/_build=${build}/" \
+            -e "s/^pkgrel=.*/pkgrel=1/" \
+            -e "s/^sha256sums_x86_64=.*/sha256sums_x86_64=('${sum_x64}')/" \
+            -e "s/^sha256sums_aarch64=.*/sha256sums_aarch64=('${sum_arm}')/" \
+            PKGBUILD
+
+          bash -n PKGBUILD
+
+          # .SRCINFO 必须用 makepkg 生成（格式由 pacman 版本决定，不要手写）。
+          # makepkg 不能以 root 运行，所以在临时目录里以 builder 身份跑。
+          work=$(mktemp -d)
+          cp PKGBUILD "$work/"
+          chown -R builder "$work"
+          su builder -s /bin/bash -c "cd '$work' && makepkg --printsrcinfo" > "$work/SRCINFO.new"
+          install -m644 "$work/SRCINFO.new" .SRCINFO
+
+          {
+            echo "### WorkBuddy 自动更新"
+            echo ""
+            echo "| 项 | 值 |"
+            echo "|---|---|"
+            echo "| 旧版本 | \`$current\` |"
+            echo "| 新版本 | \`$upstream\` |"
+            echo "| x86_64 sha256 | \`$sum_x64\` |"
+            echo "| aarch64 sha256 | \`$sum_arm\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo 'changed=true' >> "$GITHUB_OUTPUT"
+          echo "version=${upstream}" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push
+        if: steps.update.outputs.changed == 'true'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'chore: auto update to ${{ steps.update.outputs.version }}'
+          branch: main
+          file_pattern: 'PKGBUILD .SRCINFO'

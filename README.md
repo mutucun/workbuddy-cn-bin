@@ -3,7 +3,7 @@
 WorkBuddy **国内版**（`workbuddy.cn`）的 Arch Linux 安装包，基于官方 Debian 包重打包。
 
 - 包名：`workbuddy-cn-bin`
-- 上游版本：`5.6.2.40046327_c7b525f3`（官方 Linux 包发布于 2026-09-30）
+- 上游版本：见 `PKGBUILD` 中的 `_pkgver` / `_build`（自动更新）
 - 安装位置：`/opt/WorkBuddy/`
 - 启动命令：`workbuddy-cn`
 - 状态：**✅ 可用** —— 已在 Arch Linux + niri 环境下实测：`makepkg -si` 构建、启动、登录全部通过
