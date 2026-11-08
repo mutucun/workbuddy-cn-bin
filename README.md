@@ -47,7 +47,7 @@ curl 'https://copilot.tencent.com/v2/update?platform=workbuddy-linux-x64-deb'
 | 结论 | 依据 |
 |---|---|
 | 自带 Electron **37.10.3**，原生模块已是 ELF，**无需 electron-rebuild** | `/opt/WorkBuddy/version`、`file better_sqlite3.node` |
-| 应用**没有**任何 Wayland 自适应逻辑 → 强制 X11 是必需的，不是保守选择 | `main/index.js` 里 `wayland` 只出现在 GPU 降级的注释中 |
+| 应用**没有**任何 Wayland 自适应逻辑 → 平台选择完全由启动器的参数决定 | `main/index.js` 里 `wayland` 只出现在 GPU 降级的注释中 |
 | `WM_CLASS = workbuddy` | `deriveLinuxWmClass()` 取 `asciiSlug(applicationName).toLowerCase()`，而 `applicationName = WorkBuddy` |
 | Linux 下**不**追加 `--no-sandbox`（只有 Windows 加） | `appendSwitch("no-sandbox")` 被 `process.platform === "win32"` 包住 |
 | 数据目录 `~/.workbuddy`，userData `~/.workbuddy/app` | `product.json#dataFolderName`、`main/runtime-paths.js` |
@@ -91,22 +91,45 @@ AUR 上已有 `workbuddy`、`workbuddy-agent` 等包也打包国内版，安装�
 
 ## 已知问题
 
-### 1. 必须强制 X11（Wayland 会崩）
+### 1. 图形后端：默认原生 Wayland（2026-11-08 起，不再强制 X11）
 
-Electron 在 niri 这类纯 Wayland 合成器下走 Ozone/Wayland 后端会触发协议层崩溃
-（启动即退或白屏）。本包已经在两处强制 X11：
+**2026-11-08 实测：niri 26.04 + 包内 Electron 37.10.3，原生 Wayland 正常，不再强制 X11。**
 
-- `workbuddy-cn.sh`：`ELECTRON_OZONE_PLATFORM_HINT=x11`
-- `workbuddy-cn.desktop`：`Exec=env ELECTRON_OZONE_PLATFORM_HINT=x11 ...`
+本包此前在 `workbuddy-cn.sh` 与 `workbuddy-cn.desktop` 两处强制
+`ELECTRON_OZONE_PLATFORM_HINT=x11`，理由是「Electron 在纯 Wayland 合成器下会协议层崩溃
+（启动即退 / 白屏）」。**该结论来自更早的 macOS 魔改路线**（Electron 44.9.3 +
+`electron-rebuild` 的逆向包），不适用于官方原生 `.deb` 自带的 37.10.3——这是两套不同的
+二进制，旧结论被错误地沿用了下来。
 
-需要 XWayland 可用（`xorg-xwayland`）。
+现在的默认行为：
 
-✅ **已在 Arch Linux + niri 下实测通过**：经 XWayland 启动正常，登录可用。
-想自己试 Wayland 后端：
+| 位置 | 现在的值 |
+|---|---|
+| `workbuddy-cn.sh` | `ELECTRON_OZONE_PLATFORM_HINT=auto`（`:=` 默认值，可被环境变量覆盖） |
+| `workbuddy-cn.desktop` | `Exec=/usr/bin/workbuddy-cn %U`（不再用 `env` 强制） |
+| 传给 Electron 的附加参数 | `--enable-wayland-ime --wayland-text-input-version=3` |
+
+`auto` 的语义（Chromium Ozone）：**Wayland 会话走原生 Wayland，X11 会话自动回落 X11**。
+所以两种会话共用同一个包，不需要分别打包。注意 `--ozone-platform-hint` 的默认值直到
+Chrome 140 才翻成 `auto`，本包是 Chrome 138，因此必须显式指定，不能依赖默认。
+
+输入法：`--enable-wayland-ime` 让 Chromium 走 `text-input-v3`（fcitx5 在 niri 下实测可用）。
+`--wayland-text-input-version=3` 目前就是默认值，显式写出来是为了钉死默认、防上游变更。
+
+**回滚到 X11 不需要重新打包**（脚本用的是 `:=`，环境变量优先于默认值）：
 
 ```bash
-ELECTRON_OZONE_PLATFORM_HINT=wayland workbuddy-cn
+ELECTRON_OZONE_PLATFORM_HINT=x11 workbuddy-cn
 ```
+
+要永久回滚，把 `workbuddy-cn.sh` 里的 `:=auto` 改回 `:=x11`，再走一遍
+`updpkgsums` → `makepkg --printsrcinfo > .SRCINFO` → `makepkg -si` 即可；
+两个 `--wayland-*` 参数在 X11 后端下是空转，留不留都行，**不涉及任何依赖增删**。
+
+⏳ **剪贴板待观察**：切到原生 Wayland 后，XWayland 那条「`Ctrl+V` 偶发粘出旧内容」的链路
+（`xwayland-satellite` 的 selection 桥）已被绕开，但 Chromium 在 Wayland 下另有已知的
+stale-read 问题（[electron#54645](https://github.com/electron/electron/issues/54645)），
+所以**粘贴是否彻底正常仍需长期观察，不要当成已修复**。
 
 ### 2. 应用内自动更新不可用
 

@@ -57,10 +57,8 @@ source=(
 source_x86_64=("${_x64deb}::https://download.codebuddy.cn/workbuddy/saas/linux-x64-deb/${_x64deb}")
 source_aarch64=("${_aarch64deb}::https://download.codebuddy.cn/workbuddy/saas/linux-arm64-deb/${_aarch64deb}")
 
-sha256sums=(
-  'ae423abd5c5e1fff936889bd29d1c536a87b1d4c6c25739387c5de048fabeb1e'
-  '3ce472b6cf98894b432f3c07c67f6f29103d219bc28ac3efac7764cc17d787f0'
-)
+sha256sums=('3a975c59323637a768db87ed4ee79386946963f6c5df31921f7c8b3fd417e372'
+            '19036e33e8d742a5bf4a6447ef00be462e36c457c446dd17a1a8876948350672')
 sha256sums_x86_64=('12149ad8c0cd748fd5062d8f62c7827d688d8095427ada99b1ae9e7019897523')
 sha256sums_aarch64=('561822578435d382a06d0a0b079a4b157f68b588c9fe72d589e2a88b2fd155fa')
 
