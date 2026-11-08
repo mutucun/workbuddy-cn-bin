@@ -1,12 +1,14 @@
 # workbuddy-cn-bin
 
+> [!success] 2026-11-08 更新：已默认使用原生 Wayland，修复了 `Ctrl+V` 粘贴错误的 Bug。
+
 WorkBuddy **国内版**（`workbuddy.cn`）的 Arch Linux 安装包，基于官方 Debian 包重打包。
 
 - 包名：`workbuddy-cn-bin`
 - 上游版本：见 `PKGBUILD` 中的 `_pkgver` / `_build`（自动更新）
 - 安装位置：`/opt/WorkBuddy/`
 - 启动命令：`workbuddy-cn`
-- 状态：**✅ 可用** —— 已在 Arch Linux + niri 环境下实测：`makepkg -si` 构建、启动、登录全部通过
+- 状态：**✅ 可用** —— 已在 Arch Linux + niri（Wayland）下实测：`makepkg -si` 构建、启动、登录全部通过；默认以原生 Wayland 运行
 
 > **个人自用打包仓库。** 本仓库不发布到 AUR，也不维护 AUR 版本；安装方式只有「clone 下来自己构建」这一种。
 >
@@ -18,7 +20,7 @@ WorkBuddy **国内版**（`workbuddy.cn`）的 Arch Linux 安装包，基于官�
 ## 为什么会有这个包
 
 历史上 WorkBuddy 没有 Linux 客户端，社区只能拿 macOS 的 `.dmg` 解包，再用
-`electron-rebuild` 重编译 `sqlite3` / `spdlog`，并强制 X11 才能启动——那条路线非常脆。
+`electron-rebuild` 重编译 `sqlite3` / `spdlog`——那条路线非常脆，而且只能在 X11 后端下跑。
 
 **现在官方已经提供 Linux 原生包**：
 
@@ -89,47 +91,60 @@ AUR 上已有 `workbuddy`、`workbuddy-agent` 等包也打包国内版，安装�
 
 ---
 
+## 已解决的问题
+
+### `Ctrl+V` 偶发粘出上一次复制的旧内容（2026-11-08 解决）
+
+| 项 | 内容 |
+|---|---|
+| 现象 | 应用内按 `Ctrl+V` 偶发粘出上一次复制的旧文本（像是读到了 `PRIMARY` 选区的残留），右键 → 粘贴始终正常 |
+| 根因 | 走 XWayland 时，`xwayland-satellite` 的 X11↔Wayland 选区桥接存在 owner 交接时序窗口：`CLIPBOARD` / `PRIMARY` 的所有权转移慢半拍，读取方可能拿到上一个 owner 的内容。与 WorkBuddy 自身的打包质量无关，同环境下的其它 Electron 应用同样可能复现 |
+| 解决 | 改为原生 Wayland（`ELECTRON_OZONE_PLATFORM_HINT=auto`），应用不再经卫星进程做选区桥接，该链路被整体绕开 |
+| 状态 | ✅ 2026-11-08 起正常 |
+
+> 备注：Chromium 在 Wayland 下另有已知的 stale-read 问题
+> （[electron#54645](https://github.com/electron/electron/issues/54645)：一直返回自己缓存的那份内容）。
+> 若日后再次出现「粘出旧内容」，先确认是否属于这一类，再判断是不是本包的回归。
+
+---
+
 ## 已知问题
 
-### 1. 图形后端：默认原生 Wayland（2026-11-08 起，不再强制 X11）
+### 1. 图形后端：原生 Wayland（2026-11-08 起）
 
-**2026-11-08 实测：niri 26.04 + 包内 Electron 37.10.3，原生 Wayland 正常，不再强制 X11。**
-
-本包此前在 `workbuddy-cn.sh` 与 `workbuddy-cn.desktop` 两处强制
-`ELECTRON_OZONE_PLATFORM_HINT=x11`，理由是「Electron 在纯 Wayland 合成器下会协议层崩溃
-（启动即退 / 白屏）」。**该结论来自更早的 macOS 魔改路线**（Electron 44.9.3 +
-`electron-rebuild` 的逆向包），不适用于官方原生 `.deb` 自带的 37.10.3——这是两套不同的
-二进制，旧结论被错误地沿用了下来。
+**为什么换掉 XWayland。** 旧方案让 Electron 经 XWayland 以 X11 后端运行。这条链路上，
+`xwayland-satellite` 需要在 X11 选区与 Wayland 选区之间做桥接，`CLIPBOARD` 与 `PRIMARY`
+两个选区的 owner 交接存在时序窗口：读取方可能拿到上一个 owner 的内容，表现为按 `Ctrl+V`
+偶发粘出上一次复制的旧文本，而右键 → 粘贴正常。改走原生 Wayland 后，应用直接作为
+Wayland 客户端参与选区协商，这段桥接整体被绕开（详见下方「已解决的问题」）。
 
 现在的默认行为：
 
 | 位置 | 现在的值 |
 |---|---|
 | `workbuddy-cn.sh` | `ELECTRON_OZONE_PLATFORM_HINT=auto`（`:=` 默认值，可被环境变量覆盖） |
-| `workbuddy-cn.desktop` | `Exec=/usr/bin/workbuddy-cn %U`（不再用 `env` 强制） |
+| `workbuddy-cn.desktop` | `Exec=/usr/bin/workbuddy-cn %U`（不带 `env` 前缀） |
 | 传给 Electron 的附加参数 | `--enable-wayland-ime --wayland-text-input-version=3` |
 
-`auto` 的语义（Chromium Ozone）：**Wayland 会话走原生 Wayland，X11 会话自动回落 X11**。
-所以两种会话共用同一个包，不需要分别打包。注意 `--ozone-platform-hint` 的默认值直到
-Chrome 140 才翻成 `auto`，本包是 Chrome 138，因此必须显式指定，不能依赖默认。
+`auto` 的语义（Chromium Ozone）：**Wayland 会话走原生 Wayland，X11 会话自动回落 X11**，
+所以两种会话共用同一个包。注意 `--ozone-platform-hint` 的默认值直到 Chrome 140 才翻成
+`auto`，本包是 Chrome 138，因此必须显式指定，不能依赖默认值。
 
-输入法：`--enable-wayland-ime` 让 Chromium 走 `text-input-v3`（fcitx5 在 niri 下实测可用）。
-`--wayland-text-input-version=3` 目前就是默认值，显式写出来是为了钉死默认、防上游变更。
+**输入法**：`--enable-wayland-ime` 让 Chromium 通过 `text-input-v3` 接输入法；
+`--wayland-text-input-version=3` 显式钉死协议版本（它目前就是默认值，写出来是防上游变更），
+两者配合才能保证 **fcitx5 在原生 Wayland 下正常打字**（niri 26.04 实测可用）。
 
-**回滚到 X11 不需要重新打包**（脚本用的是 `:=`，环境变量优先于默认值）：
+**回退预案（不需要重新打包）**：如果某个旧版 Electron 在原生 Wayland 下又出现白屏 / 闪退，
+在终端用环境变量启动即可覆盖默认值：
 
 ```bash
 ELECTRON_OZONE_PLATFORM_HINT=x11 workbuddy-cn
 ```
 
-要永久回滚，把 `workbuddy-cn.sh` 里的 `:=auto` 改回 `:=x11`，再走一遍
-`updpkgsums` → `makepkg --printsrcinfo > .SRCINFO` → `makepkg -si` 即可；
+原理是 `workbuddy-cn.sh` 用的是 `:=`（仅在未设置时赋默认值），外部环境变量优先。
+想永久回滚，把 `:=auto` 改回 `:=x11`，再走一遍
+`updpkgsums` → `makepkg --printsrcinfo > .SRCINFO` → `makepkg -si`；
 两个 `--wayland-*` 参数在 X11 后端下是空转，留不留都行，**不涉及任何依赖增删**。
-
-⏳ **剪贴板待观察**：切到原生 Wayland 后，XWayland 那条「`Ctrl+V` 偶发粘出旧内容」的链路
-（`xwayland-satellite` 的 selection 桥）已被绕开，但 Chromium 在 Wayland 下另有已知的
-stale-read 问题（[electron#54645](https://github.com/electron/electron/issues/54645)），
-所以**粘贴是否彻底正常仍需长期观察，不要当成已修复**。
 
 ### 2. 应用内自动更新不可用
 
@@ -152,6 +167,9 @@ Linux 包由官方维护，但发版节奏明显慢于 macOS。这是上游行�
 `gnome-shell-extension-appindicator`。
 
 ### 5. 白屏 / 花屏
+
+> 若白屏**只在原生 Wayland 下**出现、切 X11 就正常，先按「1. 图形后端」里的回退预案
+> 用 `ELECTRON_OZONE_PLATFORM_HINT=x11 workbuddy-cn` 启动再排查，不要先怀疑 GPU。
 
 应用**自带 GPU 降级机制**（`main/desktop-monitor-service.js` 中的 `gpu-degradation`）：
 检测到上次运行发生 GPU 进程崩溃后，下次启动会自动 `disableHardwareAcceleration()`，
