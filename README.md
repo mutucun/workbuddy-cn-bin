@@ -6,8 +6,11 @@ WorkBuddy **国内版**（`workbuddy.cn`）的 Arch Linux 安装包，基于官�
 - 上游版本：`5.6.2.40046327_c7b525f3`（官方 Linux 包发布于 2026-09-30）
 - 安装位置：`/opt/WorkBuddy/`
 - 启动命令：`workbuddy-cn`
+- 状态：**✅ 可用** —— 已在 Arch Linux + niri 环境下实测：`makepkg -si` 构建、启动、登录全部通过
 
-> **非官方打包**。本项目与腾讯无关，不提供任何担保。WorkBuddy 是腾讯的闭源商业软件，
+> **个人自用打包仓库。** 本仓库不发布到 AUR，也不维护 AUR 版本；安装方式只有「clone 下来自己构建」这一种。
+>
+> **非官方打包。** 本项目与腾讯无关，不提供任何担保。WorkBuddy 是腾讯的闭源商业软件，
 > 本仓库只做「把官方 `.deb` 装进 Arch 的 pacman 体系」这一件事。
 
 ---
@@ -54,7 +57,7 @@ curl 'https://copilot.tencent.com/v2/update?platform=workbuddy-linux-x64-deb'
 
 ## 安装
 
-### 从本仓库构建
+只有一种方式：从本仓库构建。
 
 ```bash
 git clone https://github.com/mutucun/workbuddy-cn-bin.git
@@ -62,11 +65,8 @@ cd workbuddy-cn-bin
 makepkg -si
 ```
 
-### 用 AUR helper（仅在本包已发布到 AUR 时可用）
-
-```bash
-yay -S workbuddy-cn-bin
-```
+`makepkg -si` 会下载官方 `.deb`（约 410 MB）→ 校验 sha256 → 打包 → 用 pacman 安装。
+构建产物体积约 498 MB，安装后占 1.7 GB。
 
 ### 启动
 
@@ -78,15 +78,14 @@ workbuddy-cn
 
 ---
 
-## 与 AUR 现有包的关系
+## 与其他第三方包的关系
 
-AUR 上已有两个同样打包国内版的包：`workbuddy`、`workbuddy-agent`。
-三者安装路径都是 `/opt/WorkBuddy`，**不能共存**，因此本包声明了
-`conflicts=('workbuddy' 'workbuddy-agent')` 并 `provides=('workbuddy')`。
+AUR 上已有 `workbuddy`、`workbuddy-agent` 等包也打包国内版，安装路径同样是
+`/opt/WorkBuddy`，**与本包不能共存**。因此本包声明了
+`conflicts=('workbuddy' 'workbuddy-agent')` 并 `provides=('workbuddy')`，
+安装时会由 pacman 提示替换。
 
-如果你只是想让 WorkBuddy 跑起来，直接装 AUR 的 `workbuddy` 也行；
-本包的区别在于：真实 sha256 校验（不用 `SKIP`）、独立的 `workbuddy-cn` 启动器、
-`workbuddy-cn` 命名的图标、以及不依赖 `electron` 这个系统包。
+如果你已经在用其中的某一个，装本包前先移除即可；反过来的顺序也一样。
 
 ---
 
@@ -100,18 +99,19 @@ Electron 在 niri 这类纯 Wayland 合成器下走 Ozone/Wayland 后端会触�
 - `workbuddy-cn.sh`：`ELECTRON_OZONE_PLATFORM_HINT=x11`
 - `workbuddy-cn.desktop`：`Exec=env ELECTRON_OZONE_PLATFORM_HINT=x11 ...`
 
-需要 XWayland 可用（`xorg-xwayland`）。想自己试 Wayland 后端：
+需要 XWayland 可用（`xorg-xwayland`）。
+
+✅ **已在 Arch Linux + niri 下实测通过**：经 XWayland 启动正常，登录可用。
+想自己试 Wayland 后端：
 
 ```bash
 ELECTRON_OZONE_PLATFORM_HINT=wayland workbuddy-cn
 ```
 
-⏳ **本包的 GUI 启动尚未验证**（构建机无图形会话），首次运行请留意终端输出。
-
 ### 2. 应用内自动更新不可用
 
 Electron 的 `autoUpdater` 只实现于 macOS / Windows，Linux 上没有对应后端；包内也没有
-`app-update.yml`。**请始终通过 pacman 更新**（`yay -Syu`），不要指望应用内「检查更新」。
+`app-update.yml`。**不要指望应用内「检查更新」**，更新请走下面的「更新本包」。
 另外 `/opt/WorkBuddy` 属 pacman 管理、普通用户不可写，任何试图自更新的行为都会失败。
 
 ### 3. 版本落后于 macOS / Windows
@@ -167,35 +167,50 @@ WORKBUDDY_CONFIG_DIR=~/.workbuddy-cn-test workbuddy-cn
 
 ### 7. 与国际版共存
 
-国际版（AUR `workbuddy-international-bin`）用自己的 `/opt/workbuddy-international`，
+国际版（`workbuddy-international-bin`）装在 `/opt/workbuddy-international`，
 两者安装路径不冲突，但会争抢 `x-scheme-handler/workbuddy` 的 MIME 关联
 （后装的覆盖先装的）。需要同时用两套时，用上面的 `WORKBUDDY_CONFIG_DIR`
 把配置隔离开，避免登录态互相覆盖。
 
-⏳ 国际版的 `dataFolderName` 未核实，不确定两者默认数据目录是否已经分离。
+⏳ 国际版的 `dataFolderName` 未核实，不确定两者默认数据目录是否已经分离（不影响本包单独使用）。
 
 ---
 
 ## 更新本包
 
-1. 查最新版本：
+上游发新版后，本地这样跟进：
+
+1. 拉取本仓库最新改动：
+
+   ```bash
+   git pull
+   ```
+
+2. 查官方最新版本：
 
    ```bash
    curl -s 'https://copilot.tencent.com/v2/update?platform=workbuddy-linux-x64-deb'
    ```
 
-2. 改 `PKGBUILD` 顶部的 `_pkgver` / `_build`（URL 里的
+3. 改 `PKGBUILD` 顶部的 `_pkgver` / `_build`（URL 里的
    `WorkBuddy-linux-x64-deb-<版本>-<commit>.deb` 两段）。
-3. 重算校验和：
+
+4. 重算校验和：
 
    ```bash
    updpkgsums
    ```
 
-4. 重新生成 `.SRCINFO`：
+5. 重新生成 `.SRCINFO`：
 
    ```bash
    makepkg --printsrcinfo > .SRCINFO
+   ```
+
+6. 重新构建安装：
+
+   ```bash
+   makepkg -si
    ```
 
 > `sha256sums` 里前两项是仓库内的 `workbuddy-cn.sh` 与 `workbuddy-cn.desktop`；
