@@ -1,0 +1,25 @@
+# makepkg 构建产物
+/pkg/
+/src/
+*.pkg.tar
+*.pkg.tar.*
+*.pkg.tar.zst*
+
+# 上游二进制包（构建时下载，不入库）
+*.deb
+*.rpm
+*.AppImage
+*.dmg
+*.exe
+
+# 编辑器 / 系统垃圾
+*.swp
+*~
+.DS_Store
+.idea/
+.vscode/
+
+# 本地 Agent 工作数据，不对外发布
+.workbuddy-ai/
+
+# 注意：.SRCINFO 必须入库，不要加进这里

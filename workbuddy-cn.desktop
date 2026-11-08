@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=WorkBuddy (China)
+Name[zh_CN]=WorkBuddy（国内版）
+GenericName=AI Agent
+Comment=AI Agent office assistant (unofficial Linux repack)
+Comment[zh_CN]=AI Agent 办公助手（非官方 Linux 打包）
+Exec=env ELECTRON_OZONE_PLATFORM_HINT=x11 /usr/bin/workbuddy-cn %U
+TryExec=/usr/bin/workbuddy-cn
+Icon=workbuddy-cn
+Terminal=false
+Categories=Development;
+Keywords=WorkBuddy;AI;Agent;
+StartupNotify=true
+StartupWMClass=workbuddy
+MimeType=x-scheme-handler/workbuddy;
