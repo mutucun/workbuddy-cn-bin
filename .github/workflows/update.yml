@@ -139,6 +139,12 @@ jobs:
           echo 'changed=true' >> "$GITHUB_OUTPUT"
           echo "version=${upstream}" >> "$GITHUB_OUTPUT"
 
+      - name: Mark workspace safe for git
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global --add safe.directory '*'
+
       - name: Commit and push
         if: steps.update.outputs.changed == 'true'
         uses: stefanzweifel/git-auto-commit-action@v5
