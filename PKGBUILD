@@ -1,7 +1,7 @@
 # Maintainer: mutucun <mutucun@users.noreply.github.com>
 
-_pkgver=5.6.2.40046327
-_build=c7b525f3
+_pkgver=5.11.6.44396970
+_build=0f347fd9
 
 pkgname=workbuddy-cn-bin
 pkgver=${_pkgver}_${_build}
@@ -59,8 +59,8 @@ source_aarch64=("${_aarch64deb}::https://download.codebuddy.cn/workbuddy/saas/li
 
 sha256sums=('3a975c59323637a768db87ed4ee79386946963f6c5df31921f7c8b3fd417e372'
             '19036e33e8d742a5bf4a6447ef00be462e36c457c446dd17a1a8876948350672')
-sha256sums_x86_64=('12149ad8c0cd748fd5062d8f62c7827d688d8095427ada99b1ae9e7019897523')
-sha256sums_aarch64=('561822578435d382a06d0a0b079a4b157f68b588c9fe72d589e2a88b2fd155fa')
+sha256sums_x86_64=('2eefe5e1e777bc8412b8bfe60b9acb4ccba20595a8a4eedaf120119e3a156de8')
+sha256sums_aarch64=('d0785c00574c11914b9102936239d4cd29d5faaed8ec480f78cf33c1d0f2e9fd')
 
 prepare() {
   # makepkg 对 .deb 走 bsdtar 兜底，$srcdir 下已有 debian-binary / control.tar.xz / data.tar.xz。

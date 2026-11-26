@@ -1,6 +1,6 @@
 pkgbase = workbuddy-cn-bin
 	pkgdesc = 腾讯 WorkBuddy 国内版 AI Agent 办公工具（非官方移植：官方 deb 重打包）
-	pkgver = 5.6.2.40046327_c7b525f3
+	pkgver = 5.11.6.44396970_0f347fd9
 	pkgrel = 1
 	url = https://www.workbuddy.cn/
 	arch = x86_64
@@ -41,9 +41,9 @@ pkgbase = workbuddy-cn-bin
 	source = workbuddy-cn.desktop
 	sha256sums = 3a975c59323637a768db87ed4ee79386946963f6c5df31921f7c8b3fd417e372
 	sha256sums = 19036e33e8d742a5bf4a6447ef00be462e36c457c446dd17a1a8876948350672
-	source_x86_64 = WorkBuddy-linux-x64-deb-5.6.2.40046327-c7b525f3.deb::https://download.codebuddy.cn/workbuddy/saas/linux-x64-deb/WorkBuddy-linux-x64-deb-5.6.2.40046327-c7b525f3.deb
-	sha256sums_x86_64 = 12149ad8c0cd748fd5062d8f62c7827d688d8095427ada99b1ae9e7019897523
-	source_aarch64 = WorkBuddy-linux-arm64-deb-5.6.2.40046327-c7b525f3.deb::https://download.codebuddy.cn/workbuddy/saas/linux-arm64-deb/WorkBuddy-linux-arm64-deb-5.6.2.40046327-c7b525f3.deb
-	sha256sums_aarch64 = 561822578435d382a06d0a0b079a4b157f68b588c9fe72d589e2a88b2fd155fa
+	source_x86_64 = WorkBuddy-linux-x64-deb-5.11.6.44396970-0f347fd9.deb::https://download.codebuddy.cn/workbuddy/saas/linux-x64-deb/WorkBuddy-linux-x64-deb-5.11.6.44396970-0f347fd9.deb
+	sha256sums_x86_64 = 2eefe5e1e777bc8412b8bfe60b9acb4ccba20595a8a4eedaf120119e3a156de8
+	source_aarch64 = WorkBuddy-linux-arm64-deb-5.11.6.44396970-0f347fd9.deb::https://download.codebuddy.cn/workbuddy/saas/linux-arm64-deb/WorkBuddy-linux-arm64-deb-5.11.6.44396970-0f347fd9.deb
+	sha256sums_aarch64 = d0785c00574c11914b9102936239d4cd29d5faaed8ec480f78cf33c1d0f2e9fd
 
 pkgname = workbuddy-cn-bin
